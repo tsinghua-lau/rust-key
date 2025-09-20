@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 允许应用接收输入事件 -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	
+	<!-- 允许键盘监控权限 -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	
+	<!-- 允许网络访问（如果需要） -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	
+	<!-- 允许访问用户选择的文件 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	
+	<!-- 允许读取用户的音乐库（播放音效） -->
+	<key>com.apple.security.assets.music.read-only</key>
+	<true/>
+	
+	<!-- 硬化运行时 -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<false/>
+	
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<false/>
+	
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<false/>
+	
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<false/>
+	
+	<!-- 禁用执行时调试 -->
+	<key>com.apple.security.get-task-allow</key>
+	<false/>
+</dict>
+</plist>

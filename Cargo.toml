@@ -1,0 +1,34 @@
+[package]
+name = "macos-key-sound"
+version = "0.1.0"
+edition = "2021"
+description = "A macOS app that plays sound effects on keyboard input"
+authors = ["Your Name <your.email@example.com>"]
+
+[[bin]]
+name = "test_keyboard"
+path = "test_keyboard.rs"
+
+[dependencies]
+rdev = "0.5"
+rodio = "0.17"
+tray-icon = "0.17"
+winit = "0.30"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+crossbeam-channel = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+simplelog = "0.12"
+[package.metadata.bundle]
+name = "MacOS Key Sound"
+identifier = "com.example.macos-key-sound"
+icon = []
+version = "0.1.0"
+resources = ["assets/"]
+copyright = "Copyright (c) 2024"
+category = "Utility"
+short_description = "Play sound effects on keyboard input"
+long_description = "A macOS desktop application that runs in the system tray and plays sound effects when keys are pressed."
+osx_minimum_system_version = "10.15"
