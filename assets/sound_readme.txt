@@ -1,6 +1,6 @@
 Sound Asset Instructions:
 
-You need to place a sound file named "sound.mp3" in this directory.
+You need to place a sound file named "sound.wav" in this directory.
 
 Recommended sound file:
 - Format: WAV, MP3, or OGG
@@ -14,6 +14,6 @@ You can:
 3. Use macOS built-in sounds from /System/Library/Sounds/
 
 For testing, you can copy a system sound:
-cp /System/Library/Sounds/Tink.aiff assets/sound.mp3
+cp /System/Library/Sounds/Tink.aiff assets/sound.wav
 
-Note: The application will look for "sound.mp3" in this directory.
+Note: The application will look for "sound.wav" in this directory.

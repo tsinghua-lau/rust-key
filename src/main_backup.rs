@@ -32,8 +32,8 @@ struct AppState {
 impl AppState {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // 检查音频文件是否存在
-        if !std::path::Path::new("assets/sound.mp3").exists() {
-            eprintln!("警告: 音频文件 assets/sound.mp3 不存在");
+        if !std::path::Path::new("assets/sound.wav").exists() {
+            eprintln!("警告: 音频文件 assets/sound.wav 不存在");
         }
         
         let settings = Arc::new(Mutex::new(load_settings()));
@@ -76,7 +76,7 @@ impl AppState {
                         Ok(sink) => {
                             println!("Sink创建成功");
                             
-                            match File::open("assets/sound.mp3") {
+                            match File::open("assets/sound.wav") {
                                 Ok(file) => {
                                     println!("音频文件打开成功");
                                     let source = BufReader::new(file);

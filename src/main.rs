@@ -24,12 +24,14 @@ use simplelog::*;
 #[derive(Serialize, Deserialize, Debug)]
 struct Settings {
     sound_enabled: bool,
+    volume: f32, // 音量范围 0.0 - 1.0
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             sound_enabled: true,
+            volume: 0.7, // 默认音量70%
         }
     }
 }
@@ -71,13 +73,14 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
 impl AppState {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let loaded_settings = load_settings();
-        info!("加载的设置: sound_enabled = {}", loaded_settings.sound_enabled);
+        info!("加载的设置: sound_enabled = {}, volume = {:.0}%",
+              loaded_settings.sound_enabled, loaded_settings.volume * 100.0);
         let settings = Arc::new(Mutex::new(loaded_settings));
         let sound_path = locate_sound_file();
         if let Some(p) = &sound_path {
             info!("音频文件定位成功: {}", p.display());
         } else {
-            warn!("未找到音频文件，请检查安装包内 Resources/assets/sound.mp3 是否存在");
+            warn!("未找到音频文件，请检查安装包内 Resources/assets/sound.wav 是否存在");
         }
         Ok(AppState { settings, sound_path })
     }
@@ -94,6 +97,35 @@ impl AppState {
         info!("音效状态切换: {}", if enabled { "开启" } else { "关闭" });
         enabled
     }
+
+    fn get_volume(&self) -> f32 {
+        self.settings.lock().unwrap().volume
+    }
+
+    fn set_volume(&self, volume: f32) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.volume = volume.clamp(0.0, 1.0);
+        save_settings(&settings);
+        info!("音量设置为: {:.0}%", settings.volume * 100.0);
+    }
+
+    fn increase_volume(&self) -> f32 {
+        let mut settings = self.settings.lock().unwrap();
+        settings.volume = (settings.volume + 0.1).clamp(0.0, 1.0);
+        let new_volume = settings.volume;
+        save_settings(&settings);
+        info!("音量增加到: {:.0}%", new_volume * 100.0);
+        new_volume
+    }
+
+    fn decrease_volume(&self) -> f32 {
+        let mut settings = self.settings.lock().unwrap();
+        settings.volume = (settings.volume - 0.1).clamp(0.0, 1.0);
+        let new_volume = settings.volume;
+        save_settings(&settings);
+        info!("音量减少到: {:.0}%", new_volume * 100.0);
+        new_volume
+    }
     
     fn play_sound(&self) {
         if !self.is_sound_enabled() {
@@ -105,7 +137,8 @@ impl AppState {
             return;
         }
         let sound_path = self.sound_path.clone();
-        debug!("准备播放音效: {:?}", sound_path);
+        let volume = self.get_volume();
+        debug!("准备播放音效: {:?}, 音量: {:.0}%", sound_path, volume * 100.0);
         thread::spawn(move || {
             if let Some(path) = sound_path {
                 debug!("音频线程启动，文件: {}", path.display());
@@ -113,6 +146,8 @@ impl AppState {
                     Ok((_stream, stream_handle)) => {
                         match Sink::try_new(&stream_handle) {
                             Ok(sink) => {
+                                // 设置音量
+                                sink.set_volume(volume);
                                 match File::open(&path) {
                                     Ok(file) => {
                                         let source = BufReader::new(file);
@@ -120,7 +155,7 @@ impl AppState {
                                             Ok(decoder) => {
                                                 sink.append(decoder);
                                                 sink.sleep_until_end();
-                                                debug!("音效播放完成");
+                                                debug!("音效播放完成，音量: {:.0}%", volume * 100.0);
                                             }
                                             Err(e) => error!("音频解码失败: {:?}", e),
                                         }
@@ -134,7 +169,7 @@ impl AppState {
                     Err(e) => error!("创建音频输出流失败: {:?}", e),
                 }
             }
-        });        
+        });
     }
 }
 
@@ -151,16 +186,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 创建托盘菜单
     let menu = Menu::new();
-    
+
     let toggle_item = MenuItem::new(
         if app_state.is_sound_enabled() { "✓ 启用音效" } else { "启用音效" },
         true,
         None
     );
+
+    // 音量控制菜单项 - 平铺显示而不是子菜单
+    let volume_up_item = MenuItem::new("🔊 音量+", true, None);
+    let volume_down_item = MenuItem::new("🔉 音量-", true, None);
+    let current_volume = format!("🎵 当前音量: {:.0}%", app_state.get_volume() * 100.0);
+    let volume_display_item = MenuItem::new(&current_volume, false, None);
+
+    // 快捷音量设置
+    let volume_25_item = MenuItem::new("🔹 设置为 25%", true, None);
+    let volume_50_item = MenuItem::new("🔹 设置为 50%", true, None);
+    let volume_75_item = MenuItem::new("🔹 设置为 75%", true, None);
+    let volume_100_item = MenuItem::new("🔹 设置为 100%", true, None);
+
     let separator = PredefinedMenuItem::separator();
     let quit_item = MenuItem::new("退出", true, None);
-    
+
     menu.append(&toggle_item)?;
+    menu.append(&separator)?;
+    menu.append(&volume_display_item)?;
+    menu.append(&volume_up_item)?;
+    menu.append(&volume_down_item)?;
+    menu.append(&PredefinedMenuItem::separator())?;
+    menu.append(&volume_25_item)?;
+    menu.append(&volume_50_item)?;
+    menu.append(&volume_75_item)?;
+    menu.append(&volume_100_item)?;
     menu.append(&separator)?;
     menu.append(&quit_item)?;
     
@@ -172,14 +229,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_icon(icon)
         .build()?;
     
-    // 在后台线程启动键盘监听 - 只监听不播放声音
+    // 在后台线程启动键盘监听 - 监听并播放声音
+    let app_state_for_keyboard = Arc::clone(&app_state);
     thread::spawn(move || {
-        info!("🎯 键盘监听线程已启动 - 实时监听模式");
+        info!("🎯 键盘监听线程已启动 - 监听并播放音效");
 
         let listen_result = listen(move |event| {
             if let EventType::KeyPress(key) = &event.event_type {
                 info!("按下按键: {:?}", key);
-                // 不播放音效，只记录键盘事件
+                // 播放音效
+                app_state_for_keyboard.play_sound();
             }
         });
 
@@ -206,6 +265,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tray_channel: TrayIconEvent::receiver().clone(),
         toggle_item,
         quit_item,
+        volume_up_item,
+        volume_down_item,
+        volume_display_item,
+        volume_25_item,
+        volume_50_item,
+        volume_75_item,
+        volume_100_item,
     };
     
     event_loop.run_app(&mut app_handler)?;
@@ -219,6 +285,13 @@ struct TrayApp {
     tray_channel: crossbeam_channel::Receiver<TrayIconEvent>,
     toggle_item: MenuItem,
     quit_item: MenuItem,
+    volume_up_item: MenuItem,
+    volume_down_item: MenuItem,
+    volume_display_item: MenuItem,
+    volume_25_item: MenuItem,
+    volume_50_item: MenuItem,
+    volume_75_item: MenuItem,
+    volume_100_item: MenuItem,
 }
 
 impl ApplicationHandler for TrayApp {
@@ -251,11 +324,36 @@ impl ApplicationHandler for TrayApp {
             if event.id == self.toggle_item.id() {
                 let enabled = self.app_state.toggle_sound();
                 self.toggle_item.set_text(if enabled { "✓ 启用音效" } else { "启用音效" });
+            } else if event.id == self.volume_up_item.id() {
+                let new_volume = self.app_state.increase_volume();
+                self.update_volume_display(new_volume);
+            } else if event.id == self.volume_down_item.id() {
+                let new_volume = self.app_state.decrease_volume();
+                self.update_volume_display(new_volume);
+            } else if event.id == self.volume_25_item.id() {
+                self.app_state.set_volume(0.25);
+                self.update_volume_display(0.25);
+            } else if event.id == self.volume_50_item.id() {
+                self.app_state.set_volume(0.50);
+                self.update_volume_display(0.50);
+            } else if event.id == self.volume_75_item.id() {
+                self.app_state.set_volume(0.75);
+                self.update_volume_display(0.75);
+            } else if event.id == self.volume_100_item.id() {
+                self.app_state.set_volume(1.0);
+                self.update_volume_display(1.0);
             } else if event.id == self.quit_item.id() {
                 info!("用户请求退出应用");
                 std::process::exit(0);
             }
         }
+    }
+}
+
+impl TrayApp {
+    fn update_volume_display(&self, volume: f32) {
+        let volume_text = format!("🎵 当前音量: {:.0}%", volume * 100.0);
+        self.volume_display_item.set_text(&volume_text);
     }
 }
 
@@ -336,40 +434,40 @@ fn save_settings(settings: &Settings) {
 fn locate_sound_file() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     
-    // 1. 开发环境：工作目录中的 assets/sound.mp3
+    // 1. 开发环境：工作目录中的 assets/sound.wav
     if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("assets/sound.mp3"));
+        candidates.push(cwd.join("assets/sound.wav"));
     } else {
-        candidates.push(PathBuf::from("assets/sound.mp3"));
+        candidates.push(PathBuf::from("assets/sound.wav"));
     }
     
     // 2. macOS 应用包中的资源路径
     if let Ok(exe) = std::env::current_exe() {
         debug!("可执行文件路径: {}", exe.display());
         
-        // 方案A: Contents/Resources/assets/sound.mp3 (标准 macOS 应用包结构)
+        // 方案A: Contents/Resources/assets/sound.wav (标准 macOS 应用包结构)
         if let Some(resources) = exe.parent() // MacOS 目录
             .and_then(|p| p.parent()) // Contents 目录
-            .map(|c| c.join("Resources").join("assets").join("sound.mp3")) {
+            .map(|c| c.join("Resources").join("assets").join("sound.wav")) {
             candidates.push(resources.clone());
             debug!("候选路径A: {}", resources.display());
         }
         
-        // 方案B: Contents/Resources/sound.mp3 (直接放在Resources下)
+        // 方案B: Contents/Resources/sound.wav (直接放在Resources下)
         if let Some(resources) = exe.parent() // MacOS 目录
             .and_then(|p| p.parent()) // Contents 目录
-            .map(|c| c.join("Resources").join("sound.mp3")) {
+            .map(|c| c.join("Resources").join("sound.wav")) {
             candidates.push(resources.clone());
             debug!("候选路径B: {}", resources.display());
         }
         
         // 方案C: 与可执行文件同目录
         if let Some(exe_dir) = exe.parent() {
-            let same_dir = exe_dir.join("sound.mp3");
+            let same_dir = exe_dir.join("sound.wav");
             candidates.push(same_dir.clone());
             debug!("候选路径C: {}", same_dir.display());
             
-            let assets_in_exe_dir = exe_dir.join("assets").join("sound.mp3");
+            let assets_in_exe_dir = exe_dir.join("assets").join("sound.wav");
             candidates.push(assets_in_exe_dir.clone());
             debug!("候选路径D: {}", assets_in_exe_dir.display());
         }

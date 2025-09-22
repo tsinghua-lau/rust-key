@@ -30,10 +30,10 @@ create-dmg --version
 
 ```bash
 # 检查项目文件完整性
-ls -la src/main.rs assets/sound.mp3 Cargo.toml
+ls -la src/main.rs assets/sound.wav Cargo.toml
 
 # 确保音效文件存在
-file assets/sound.mp3
+file assets/sound.wav
 ```
 
 ## 🔨 详细打包步骤

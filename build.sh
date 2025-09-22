@@ -39,8 +39,8 @@ echo "🧹 清理旧 DMG 文件..."
 find dist -type f -name "${DMG_NAME}*.dmg" -delete 2>/dev/null || true
 
 # 校验资源文件是否存在
-if [ ! -f assets/sound.mp3 ]; then
-  echo "❌ 缺少资源文件 assets/sound.mp3" >&2
+if [ ! -f assets/sound.wav ]; then
+  echo "❌ 缺少资源文件 assets/sound.wav" >&2
   echo "请确保声音文件存在后再打包" >&2
   exit 1
 fi
