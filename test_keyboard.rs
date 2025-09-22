@@ -1,5 +1,5 @@
 use rdev::{listen, EventType};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use simplelog::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

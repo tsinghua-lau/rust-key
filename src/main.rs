@@ -135,7 +135,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化日志系统
     if let Err(e) = init_logging() {
         eprintln!("无法初始化日志系统: {}", e);
-        // 继续运行，但没有日志文件
     }
     
     info!("MacOS Key Sound GUI - 启动中...");
@@ -169,88 +168,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 创建通信通道
     let (tx, rx) = std::sync::mpsc::channel();
     
-    // 启动键盘监听线程，带有更好的错误处理
+    // 🔧 修改键盘监听 - 使用不同的线程策略避免HIToolbox问题
     let app_state_for_keyboard = Arc::clone(&app_state);
     let tx_clone = tx.clone();
+    let _tx_for_error = tx.clone();
+
+    // 尝试使用较短的事件处理来避免长时间在后台线程
     thread::spawn(move || {
         info!("🎯 键盘监听线程已启动");
 
-        // 创建一个测试计数器来检测线程是否正常运行
-        let mut heartbeat_counter = 0;
+        // 使用最小化的事件处理避免HIToolbox线程问题
+        let listen_result = listen(move |event| {
+            // 检查键盘按下事件并打印具体按键
+            if let EventType::KeyPress(key) = &event.event_type {
+                // 打印按下的具体键
+                info!("按下按键: {:?}", key);
 
-        // 重试机制
-        let mut retry_count = 0;
-        const MAX_RETRIES: u32 = 3;
+                // 立即触发音效
+                app_state_for_keyboard.play_sound();
+                let _ = tx_clone.send(true);
+            }
+        });
 
-        loop {
-            let app_state_clone = Arc::clone(&app_state_for_keyboard);
-            let tx_inner = tx_clone.clone();
-
-            info!("🔄 尝试启动键盘监听 (第{}次)", retry_count + 1);
-
-            // 创建一个心跳线程来检测监听是否卡住
-            let heartbeat_app_state = Arc::clone(&app_state_for_keyboard);
-            let heartbeat_tx = tx_clone.clone();
-            let heartbeat_handle = thread::spawn(move || {
-                for i in 1..=10 {
-                    thread::sleep(std::time::Duration::from_secs(3));
-                    debug!("💓 键盘监听心跳检测 #{}", i);
-
-                    // 30秒后如果还没有键盘事件，发送警告
-                    if i == 10 {
-                        warn!("⚠️  30秒内未检测到任何键盘事件");
-                        warn!("请尝试按下键盘按键进行测试");
-                        let _ = heartbeat_tx.send(false);
-                    }
-                }
-            });
-
-            match listen(move |event| {
-                heartbeat_counter += 1;
-                debug!("📥 收到输入事件 #{}: {:?}", heartbeat_counter, event.event_type);
-
-                match event.event_type {
-                    EventType::KeyPress(key) => {
-                        info!("⌨️  捕获到按键事件: {:?}", key);
-                        app_state_clone.play_sound();
-
-                        // 通知主线程键盘监听工作正常
-                        let _ = tx_inner.send(true);
-                    }
-                    EventType::KeyRelease(key) => {
-                        debug!("🔄 按键释放: {:?}", key);
-                    }
-                    _ => {
-                        debug!("📋 其他事件: {:?}", event.event_type);
-                    }
-                }
-            }) {
-                Ok(_) => {
-                    info!("✅ 键盘监听正常结束");
-                    break;
-                }
-                Err(error) => {
-                    error!("❌ 键盘监听错误: {:?}", error);
-
-                    // 停止心跳线程
-                    drop(heartbeat_handle);
-
-                    if retry_count < MAX_RETRIES {
-                        retry_count += 1;
-                        warn!("🔄 尝试重启键盘监听 (第{}次)", retry_count);
-                        thread::sleep(std::time::Duration::from_secs(2));
-                        continue;
-                    } else {
-                        error!("💥 键盘监听失败次数过多，停止重试");
-                        error!("⚠️  请检查辅助功能权限！");
-                        error!("🔧 解决方案：系统偏好设置 → 安全性与隐私 → 隐私 → 辅助功能");
-                        error!("    添加 'MacOS Key Sound' 应用并勾选启用");
-
-                        // 通知主线程监听失败
-                        let _ = tx_clone.send(false);
-                        break;
-                    }
-                }
+        match listen_result {
+            Ok(_) => {
+                info!("✅ 键盘监听正常结束");
+            }
+            Err(error) => {
+                error!("❌ 键盘监听错误: {:?}", error);
+                error!("⚠️  请检查辅助功能权限！");
+                error!("🔧 解决方案：系统偏好设置 → 安全性与隐私 → 隐私 → 辅助功能");
+                let _ = _tx_for_error.send(false);
             }
         }
 
@@ -258,9 +206,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     
     info!("应用已启动，请查看系统托盘图标");
-    info!("⚠️  重要：如果键盘音效不工作，请检查辅助功能权限");
-    info!("    系统偏好设置 → 安全性与隐私 → 隐私 → 辅助功能");
-    info!("    添加并启用 'MacOS Key Sound' 应用");
     
     // 主事件循环
     let mut app_handler = TrayApp {
@@ -272,7 +217,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         keyboard_status_rx: rx,
     };
     
-    // 使用新的 run_app 方法
     event_loop.run_app(&mut app_handler)?;
     
     Ok(())
@@ -298,7 +242,6 @@ impl ApplicationHandler for TrayApp {
         _window_id: winit::window::WindowId,
         _event: winit::event::WindowEvent,
     ) {
-        // 窗口事件处理（我们是托盘应用，不需要窗口）
     }
 
     fn new_events(
@@ -310,7 +253,9 @@ impl ApplicationHandler for TrayApp {
         
         // 检查键盘监听状态
         if let Ok(status) = self.keyboard_status_rx.try_recv() {
-            if !status {
+            if status {
+                debug!("键盘监听正常工作");
+            } else {
                 warn!("键盘监听失败，应用功能受限");
             }
         }
@@ -324,7 +269,6 @@ impl ApplicationHandler for TrayApp {
         if let Ok(event) = self.menu_channel.try_recv() {
             if event.id == self.toggle_item.id() {
                 let enabled = self.app_state.toggle_sound();
-                // 更新菜单项文本
                 self.toggle_item.set_text(if enabled { "✓ 启用音效" } else { "启用音效" });
             } else if event.id == self.quit_item.id() {
                 info!("用户请求退出应用");
