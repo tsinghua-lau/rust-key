@@ -10,7 +10,7 @@ name = "test_keyboard"
 path = "test_keyboard.rs"
 
 [dependencies]
-rdev = "0.5"
+# rdev = "0.5"  # 已替换为NSEvent
 rodio = "0.17"
 tray-icon = "0.17"
 winit = "0.30"
@@ -21,6 +21,9 @@ crossbeam-channel = "0.5"
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 simplelog = "0.12"
+# macOS native APIs for CGEventTap
+core-graphics = "0.24"
+core-foundation = "0.10"
 [package.metadata.bundle]
 name = "MacOS Key Sound"
 identifier = "com.example.macos-key-sound"
@@ -32,3 +35,12 @@ category = "Utility"
 short_description = "Play sound effects on keyboard input"
 long_description = "A macOS desktop application that runs in the system tray and plays sound effects when keys are pressed."
 osx_minimum_system_version = "10.15"
+
+# macOS权限配置 - 监听键盘事件需要这些权限
+[package.metadata.bundle.osx]
+
+[package.metadata.bundle.osx.info_plist_additions]
+NSAccessibilityUsageDescription = "此应用需要辅助功能权限以监听全局键盘事件并播放按键音效。"
+NSInputMonitoringUsageDescription = "此应用需要输入监控权限以检测键盘按键事件。"
+LSUIElement = true
+NSAppleEventsUsageDescription = "此应用需要访问Apple事件以提供键盘监听功能。"

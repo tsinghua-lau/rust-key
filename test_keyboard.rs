@@ -1,4 +1,6 @@
-use rdev::{listen, EventType};
+// 引入我们的键盘适配器
+mod keyboard_adapter;
+use keyboard_adapter::{listen, EventType};
 use log::{debug, error, info};
 use simplelog::*;
 
@@ -20,12 +22,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             EventType::KeyPress(key) => {
                 info!("✅ 检测到按键: {:?}", key);
             }
-            EventType::KeyRelease(key) => {
-                debug!("🔄 按键释放: {:?}", key);
-            }
-            _ => {
-                debug!("📋 其他事件: {:?}", event.event_type);
-            }
         }
     }) {
         Ok(_) => info!("键盘监听结束"),
@@ -33,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             error!("键盘监听失败: {:?}", error);
             error!("可能的原因:");
             error!("1. 辅助功能权限未授予");
-            error!("2. rdev 库与当前 macOS 版本不兼容");
+            error!("2. NSEvent 适配器需要进一步完善");
             error!("3. 应用需要从命令行运行而不是从应用包运行");
         }
     }

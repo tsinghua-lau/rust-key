@@ -1,6 +1,11 @@
 use rodio::{Decoder, OutputStream, Sink};
-use rdev::{listen, EventType};
 use serde::{Deserialize, Serialize};
+
+// 引入我们的键盘适配器
+mod keyboard_adapter;
+use keyboard_adapter::{listen, EventType};
+
+
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -65,7 +70,9 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
 
 impl AppState {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let settings = Arc::new(Mutex::new(load_settings()));
+        let loaded_settings = load_settings();
+        info!("加载的设置: sound_enabled = {}", loaded_settings.sound_enabled);
+        let settings = Arc::new(Mutex::new(loaded_settings));
         let sound_path = locate_sound_file();
         if let Some(p) = &sound_path {
             info!("音频文件定位成功: {}", p.display());
@@ -165,28 +172,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_icon(icon)
         .build()?;
     
-    // 创建通信通道
-    let (tx, rx) = std::sync::mpsc::channel();
-    
-    // 🔧 修改键盘监听 - 使用不同的线程策略避免HIToolbox问题
-    let app_state_for_keyboard = Arc::clone(&app_state);
-    let tx_clone = tx.clone();
-    let _tx_for_error = tx.clone();
-
-    // 尝试使用较短的事件处理来避免长时间在后台线程
+    // 在后台线程启动键盘监听 - 只监听不播放声音
     thread::spawn(move || {
-        info!("🎯 键盘监听线程已启动");
+        info!("🎯 键盘监听线程已启动 - 实时监听模式");
 
-        // 使用最小化的事件处理避免HIToolbox线程问题
         let listen_result = listen(move |event| {
-            // 检查键盘按下事件并打印具体按键
             if let EventType::KeyPress(key) = &event.event_type {
-                // 打印按下的具体键
                 info!("按下按键: {:?}", key);
-
-                // 立即触发音效
-                app_state_for_keyboard.play_sound();
-                let _ = tx_clone.send(true);
+                // 不播放音效，只记录键盘事件
             }
         });
 
@@ -198,7 +191,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 error!("❌ 键盘监听错误: {:?}", error);
                 error!("⚠️  请检查辅助功能权限！");
                 error!("🔧 解决方案：系统偏好设置 → 安全性与隐私 → 隐私 → 辅助功能");
-                let _ = _tx_for_error.send(false);
             }
         }
 
@@ -206,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     
     info!("应用已启动，请查看系统托盘图标");
-    
+
     // 主事件循环
     let mut app_handler = TrayApp {
         app_state,
@@ -214,7 +206,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tray_channel: TrayIconEvent::receiver().clone(),
         toggle_item,
         quit_item,
-        keyboard_status_rx: rx,
     };
     
     event_loop.run_app(&mut app_handler)?;
@@ -228,7 +219,6 @@ struct TrayApp {
     tray_channel: crossbeam_channel::Receiver<TrayIconEvent>,
     toggle_item: MenuItem,
     quit_item: MenuItem,
-    keyboard_status_rx: std::sync::mpsc::Receiver<bool>,
 }
 
 impl ApplicationHandler for TrayApp {
@@ -250,21 +240,12 @@ impl ApplicationHandler for TrayApp {
         _cause: winit::event::StartCause,
     ) {
         event_loop.set_control_flow(ControlFlow::Wait);
-        
-        // 检查键盘监听状态
-        if let Ok(status) = self.keyboard_status_rx.try_recv() {
-            if status {
-                debug!("键盘监听正常工作");
-            } else {
-                warn!("键盘监听失败，应用功能受限");
-            }
-        }
-        
+
         // 处理托盘图标事件
         if let Ok(event) = self.tray_channel.try_recv() {
             debug!("托盘事件: {:?}", event);
         }
-        
+
         // 处理菜单事件
         if let Ok(event) = self.menu_channel.try_recv() {
             if event.id == self.toggle_item.id() {
@@ -320,13 +301,24 @@ fn create_tray_icon() -> tray_icon::Icon {
 fn load_settings() -> Settings {
     if let Some(config_dir) = dirs::config_dir() {
         let config_path = config_dir.join("macos-key-sound").join("settings.json");
+        info!("查找配置文件: {}", config_path.display());
         if let Ok(content) = std::fs::read_to_string(&config_path) {
+            info!("配置文件内容: {}", content);
             if let Ok(settings) = serde_json::from_str(&content) {
+                info!("成功加载配置文件");
                 return settings;
+            } else {
+                warn!("配置文件解析失败");
             }
+        } else {
+            info!("配置文件不存在，使用默认设置");
         }
+    } else {
+        warn!("无法获取配置目录");
     }
-    Settings::default()
+    let default_settings = Settings::default();
+    info!("使用默认设置: sound_enabled = {}", default_settings.sound_enabled);
+    default_settings
 }
 
 fn save_settings(settings: &Settings) {
