@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MacOS Key Sound - 增强版一键打包构建脚本
+# AmpKey - 增强版一键打包构建脚本
 # 自动完成编译、权限配置和DMG打包的完整流程
 
 set -e  # 遇到错误立即退出
@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 应用信息
-APP_NAME="MacOS Key Sound"
+APP_NAME="AmpKey"
 VERSION="0.1.0"
 BUNDLE_PATH="target/release/bundle/osx/${APP_NAME}.app"
 INFO_PLIST="${BUNDLE_PATH}/Contents/Info.plist"
@@ -128,6 +128,99 @@ create_dist_dir() {
     fi
 }
 
+# 函数：创建icns图标文件
+create_icns() {
+    print_status "创建icns图标文件..."
+
+    local PNG_FILE="assets/app-icon.png"
+    local ICNS_FILE="assets/app-icon.icns"
+    local ICONSET_DIR="assets/app-icon.iconset"
+
+    # 检查PNG文件是否存在
+    if [ ! -f "$PNG_FILE" ]; then
+        print_error "PNG图标文件不存在: $PNG_FILE"
+        return 1
+    fi
+
+    # 如果icns文件已存在且PNG文件未修改，则跳过
+    if [ -f "$ICNS_FILE" ] && [ "$PNG_FILE" -ot "$ICNS_FILE" ]; then
+        print_status "icns文件已是最新，跳过生成"
+        return 0
+    fi
+
+    # 检查sips命令（macOS自带的图像处理工具）
+    if ! check_command "sips"; then
+        print_error "sips命令未找到，无法生成icns文件"
+        return 1
+    fi
+
+    # 创建iconset目录
+    rm -rf "$ICONSET_DIR"
+    mkdir -p "$ICONSET_DIR"
+
+    # 生成所需的各种尺寸的图标
+    print_status "生成各种尺寸的图标..."
+    sips -z 16 16     "$PNG_FILE" --out "${ICONSET_DIR}/icon_16x16.png" > /dev/null 2>&1
+    sips -z 32 32     "$PNG_FILE" --out "${ICONSET_DIR}/icon_16x16@2x.png" > /dev/null 2>&1
+    sips -z 32 32     "$PNG_FILE" --out "${ICONSET_DIR}/icon_32x32.png" > /dev/null 2>&1
+    sips -z 64 64     "$PNG_FILE" --out "${ICONSET_DIR}/icon_32x32@2x.png" > /dev/null 2>&1
+    sips -z 128 128   "$PNG_FILE" --out "${ICONSET_DIR}/icon_128x128.png" > /dev/null 2>&1
+    sips -z 256 256   "$PNG_FILE" --out "${ICONSET_DIR}/icon_128x128@2x.png" > /dev/null 2>&1
+    sips -z 256 256   "$PNG_FILE" --out "${ICONSET_DIR}/icon_256x256.png" > /dev/null 2>&1
+    sips -z 512 512   "$PNG_FILE" --out "${ICONSET_DIR}/icon_256x256@2x.png" > /dev/null 2>&1
+    sips -z 512 512   "$PNG_FILE" --out "${ICONSET_DIR}/icon_512x512.png" > /dev/null 2>&1
+    sips -z 1024 1024 "$PNG_FILE" --out "${ICONSET_DIR}/icon_512x512@2x.png" > /dev/null 2>&1
+
+    # 将iconset转换为icns
+    print_status "将iconset转换为icns..."
+    if iconutil -c icns "$ICONSET_DIR" -o "$ICNS_FILE"; then
+        print_success "icns文件生成成功: $ICNS_FILE"
+        # 清理临时目录
+        rm -rf "$ICONSET_DIR"
+        return 0
+    else
+        print_error "icns文件生成失败"
+        rm -rf "$ICONSET_DIR"
+        return 1
+    fi
+}
+
+# 函数：创建状态栏图标
+create_tray_icon() {
+    print_status "创建状态栏图标 (36x36 @2x Retina)..."
+
+    local SOURCE_ICON="assets/key-icon.png"
+    local TRAY_ICON="assets/key-icon-tray@2x.png"
+
+    # 检查源图标文件是否存在
+    if [ ! -f "$SOURCE_ICON" ]; then
+        print_error "源图标文件不存在: $SOURCE_ICON"
+        return 1
+    fi
+
+    # 如果状态栏图标已存在且源文件未修改，则跳过
+    if [ -f "$TRAY_ICON" ] && [ "$SOURCE_ICON" -ot "$TRAY_ICON" ]; then
+        print_status "状态栏图标已是最新，跳过生成"
+        return 0
+    fi
+
+    # 检查sips命令
+    if ! check_command "sips"; then
+        print_error "sips命令未找到，无法生成状态栏图标"
+        return 1
+    fi
+
+    # 生成36x36像素的@2x Retina状态栏图标
+    print_status "缩放图标到 36x36 像素 (支持 Retina 显示屏)..."
+    if sips -z 36 36 "$SOURCE_ICON" --out "$TRAY_ICON" > /dev/null 2>&1; then
+        print_success "状态栏图标生成成功: $TRAY_ICON"
+        return 0
+    else
+        print_error "状态栏图标生成失败"
+        return 1
+    fi
+}
+
 # 函数：检查资源文件
 check_resources() {
     print_status "检查资源文件..."
@@ -135,6 +228,18 @@ check_resources() {
     if [ ! -f "assets/sound.wav" ]; then
         print_error "缺少资源文件: assets/sound.wav"
         print_status "请确保音频文件存在后再构建"
+        return 1
+    fi
+
+    if [ ! -f "assets/app-icon.png" ]; then
+        print_error "缺少图标文件: assets/app-icon.png"
+        print_status "请确保PNG图标文件存在后再构建"
+        return 1
+    fi
+
+    if [ ! -f "assets/key-icon.png" ]; then
+        print_error "缺少状态栏源图标: assets/key-icon.png"
+        print_status "请确保状态栏PNG图标文件存在后再构建"
         return 1
     fi
 
@@ -179,32 +284,42 @@ main() {
         exit 1
     fi
 
-    # 2. 检查必要的命令
+    # 2. 创建icns图标文件
+    if ! create_icns; then
+        print_warning "icns文件生成失败，但继续构建流程"
+    fi
+
+    # 3. 创建状态栏图标
+    if ! create_tray_icon; then
+        print_warning "状态栏图标生成失败，但继续构建流程"
+    fi
+
+    # 4. 检查必要的命令
     print_status "检查必要的构建工具..."
     if ! check_command "cargo"; then
         print_error "Rust/Cargo未安装，请先安装Rust开发环境"
         exit 1
     fi
 
-    # 3. 安装依赖工具
+    # 5. 安装依赖工具
     if ! install_dependencies; then
         print_error "依赖工具安装失败"
         exit 1
     fi
 
-    # 4. 清理旧文件
+    # 6. 清理旧文件
     cleanup
 
-    # 5. 创建输出目录
+    # 7. 创建输出目录
     create_dist_dir
 
-    # 6. 激活Rust环境
+    # 8. 激活Rust环境
     print_status "激活Rust环境..."
     if [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
     fi
 
-    # 7. Rust编译和打包
+    # 9. Rust编译和打包
     print_status "开始Rust编译和打包..."
     echo "--------------------------------------------------"
 
@@ -230,20 +345,20 @@ main() {
         exit 1
     fi
 
-    # 8. 检查应用包是否生成
+    # 10. 检查应用包是否生成
     if [ ! -d "$BUNDLE_PATH" ]; then
         print_error "应用包未生成: $BUNDLE_PATH"
         exit 1
     fi
     print_success "应用包生成成功: $BUNDLE_PATH"
 
-    # 9. 添加权限配置
+    # 11. 添加权限配置
     if ! add_permissions; then
         print_error "权限配置添加失败"
         exit 1
     fi
 
-    # 10. 创建DMG安装包
+    # 12. 创建DMG安装包
     print_status "创建DMG安装包..."
     echo "--------------------------------------------------"
     if create-dmg --overwrite --no-code-sign "$BUNDLE_PATH" "$DIST_DIR"; then
@@ -253,10 +368,10 @@ main() {
         exit 1
     fi
 
-    # 11. 查找实际生成的DMG文件
+    # 13. 查找实际生成的DMG文件
     ACTUAL_DMG=$(find "$DIST_DIR" -name "*.dmg" -type f | head -1)
 
-    # 12. 显示构建结果
+    # 14. 显示构建结果
     echo "=================================================="
     print_success "🎉 构建完成！"
     echo ""
@@ -303,7 +418,7 @@ main() {
 
 # 显示帮助信息
 show_help() {
-    echo "MacOS Key Sound - 增强版一键构建脚本"
+    echo "AmpKey - 增强版一键构建脚本"
     echo ""
     echo "用法: $0 [选项]"
     echo ""
@@ -315,7 +430,8 @@ show_help() {
     echo ""
     echo "功能:"
     echo "  • 自动编译Rust代码"
-    echo "  • 创建macOS应用包"
+    echo "  • 创建macOS应用包和icns图标"
+    echo "  • 生成状态栏图标 (36x36 @2x Retina)"
     echo "  • 自动添加macOS权限配置"
     echo "  • 生成DMG安装包"
     echo "  • 完整的错误处理"

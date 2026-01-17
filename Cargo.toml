@@ -12,8 +12,6 @@ path = "test_keyboard.rs"
 [dependencies]
 # rdev = "0.5"  # 已替换为NSEvent
 rodio = "0.17"
-tray-icon = "0.17"
-winit = "0.30"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
@@ -24,12 +22,17 @@ simplelog = "0.12"
 # macOS native APIs for CGEventTap
 core-graphics = "0.24"
 core-foundation = "0.10"
+# macOS 原生菜单和 UI 控件
+cocoa = "0.26"
+objc = "0.2"
+# 图片处理用于状态栏图标
+image = "0.24"
 [package.metadata.bundle]
-name = "MacOS Key Sound"
-identifier = "com.example.macos-key-sound"
-icon = []
+name = "AmpKey"
+identifier = "com.ampkey.app"
+icon = ["assets/app-icon.icns"]
 version = "0.1.0"
-resources = ["assets/"]
+resources = ["assets/sound.wav", "assets/*.mp3", "assets/key-icon.png"]
 copyright = "Copyright (c) 2024"
 category = "Utility"
 short_description = "Play sound effects on keyboard input"

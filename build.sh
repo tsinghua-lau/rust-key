@@ -56,6 +56,37 @@ if ! command -v create-dmg &> /dev/null; then
     exit 0
 fi
 
+# 添加macOS权限配置
+echo "🔐 添加macOS权限配置..."
+INFO_PLIST="target/release/bundle/osx/$PROJECT_NAME.app/Contents/Info.plist"
+
+if [ -f "$INFO_PLIST" ]; then
+  # 检查是否已经包含权限配置
+  if ! grep -q "NSAccessibilityUsageDescription" "$INFO_PLIST"; then
+    # 备份原始文件
+    cp "$INFO_PLIST" "$INFO_PLIST.backup"
+
+    # 在</dict>前添加权限配置
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' '/<\/dict>/i\
+  <key>NSAccessibilityUsageDescription</key>\
+  <string>此应用需要辅助功能权限以监听全局键盘事件并播放按键音效。</string>\
+  <key>NSInputMonitoringUsageDescription</key>\
+  <string>此应用需要输入监控权限以检测键盘按键事件。</string>\
+  <key>LSUIElement</key>\
+  <true/>\
+  <key>NSAppleEventsUsageDescription</key>\
+  <string>此应用需要访问Apple事件以提供键盘监听功能。</string>
+' "$INFO_PLIST"
+    fi
+    echo "✅ 权限配置已添加"
+  else
+    echo "⚠️  权限配置已存在，跳过"
+  fi
+else
+  echo "❌ Info.plist文件不存在"
+fi
+
 # 创建 DMG 安装包
 echo "💿 创建 DMG 安装包..."
 DMG_PATH="dist/${DMG_NAME}.dmg"
