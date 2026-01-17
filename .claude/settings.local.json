@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source \"$HOME/.cargo/env\")",
+      "Bash(cargo init:*)",
+      "Bash(cargo:*)",
+      "Bash(chmod:*)",
+      "Bash(log show:*)",
+      "Bash(console)",
+      "Bash(sqlite3:*)",
+      "Bash(system_profiler:*)",
+      "Bash(killall:*)",
+      "Bash(open:*)",
+      "Bash(\"target/release/bundle/osx/MacOS Key Sound.app/Contents/MacOS/macos-key-sound\")",
+      "Bash(create-dmg:*)",
+      "Read(//Applications/**)",
+      "Bash(\"/Applications/MacOS Key Sound.app/Contents/MacOS/MacOS Key Sound\")",
+      "Bash(\"/Applications/MacOS Key Sound.app/Contents/MacOS/macos-key-sound\")",
+      "Bash(./sign_app.sh:*)",
+      "Bash(\"target/release/MacOS Key Sound.app/Contents/MacOS/macos-key-sound\")",
+      "Bash(find:*)",
+      "Read(//Users/timoduizhang/Library/Logs/macos-key-sound/**)",
+      "Read(//Users/timoduizhang/.config/**)",
+      "Read(//Users/timoduizhang/**)",
+      "Bash(\"dist/MacOS Key Sound 0.1.0.dmg\" )",
+      "Bash(\"/Users/timoduizhang/Documents/workspace/study/rust-key/target/release/bundle/osx/MacOS Key Sound.app\")",
+      "Bash(plutil:*)",
+      "Bash(./build_enhanced.sh:*)",
+      "Bash(pkill:*)",
+      "Bash(./build.sh:*)",
+      "Bash(tail:*)",
+      "Bash(ls:*)",
+      "Bash(xargs cat:*)",
+      "Bash(sips:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
