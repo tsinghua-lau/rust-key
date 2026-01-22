@@ -74,7 +74,7 @@ add_permissions() {
   <key>NSInputMonitoringUsageDescription</key>\
   <string>此应用需要输入监控权限以检测键盘按键事件。</string>\
   <key>LSUIElement</key>\
-  <true/>\
+  <false/>\
   <key>NSAppleEventsUsageDescription</key>\
   <string>此应用需要访问Apple事件以提供键盘监听功能。</string>
 ' "$INFO_PLIST"
@@ -86,7 +86,7 @@ add_permissions() {
   <key>NSInputMonitoringUsageDescription</key>\
   <string>此应用需要输入监控权限以检测键盘按键事件。</string>\
   <key>LSUIElement</key>\
-  <true/>\
+  <false/>\
   <key>NSAppleEventsUsageDescription</key>\
   <string>此应用需要访问Apple事件以提供键盘监听功能。</string>
 ' "$INFO_PLIST"
@@ -397,7 +397,7 @@ main() {
     fi
 
     # 显示可执行文件大小
-    EXEC_PATH="${BUNDLE_PATH}/Contents/MacOS/macos-key-sound"
+    EXEC_PATH="${BUNDLE_PATH}/Contents/MacOS/AmpKey"
     if [ -f "$EXEC_PATH" ]; then
         EXEC_SIZE=$(du -h "$EXEC_PATH" | cut -f1)
         print_status "⚙️  可执行文件大小: $EXEC_SIZE"
